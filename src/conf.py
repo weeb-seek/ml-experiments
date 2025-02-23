@@ -22,12 +22,18 @@ class COL_NAMES(str):
     progress = "progress"
 
 
+class ALSSettings(BaseSettings):
+    n_factors: int = 128
+    favorite_weight: float = 10.0
+
+
 class PathsSettings(BaseSettings):
     root: Path = PROJECT_ROOT
     data: Path = DATA_DIR
     interactions_raw: Path = DATA_DIR / "interactions_raw"
-    interactions_score_favorite: Path = DATA_DIR / "interactions_score_favorite.parquet"
-    user_name_id: Path = DATA_DIR / "user_name_id.parquet"
+    interactions_preprocessed: Path = DATA_DIR / "interactions_preprocessed.parquet"
+    user_meta_raw: Path = DATA_DIR / "user.csv"
+    user_meta: Path = DATA_DIR / "user_meta.parquet"
 
 
 class PostgresSettings(BaseSettings):
@@ -61,6 +67,7 @@ class PostgresSettings(BaseSettings):
 class Settings(BaseSettings):
     paths: PathsSettings = PathsSettings()
     postgres: PostgresSettings = PostgresSettings()
+    als: ALSSettings = ALSSettings()
 
 
 settings = Settings()

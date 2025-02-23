@@ -14,18 +14,27 @@ class InteractionsPreprocessor:
         self.inter_fnames = os.listdir(data_path)
         self.n_inter_fnames = len(self.inter_fnames)
 
-    def _generate_user_ids(self, inter_df: pd.DataFrame) -> pd.DataFrame:
-        user_name_df = inter_df[COL_NAMES.user_name].unique()
+        try:
+            self.user_meta = pd.read_parquet(settings.paths.user_meta)
+            logger.info("User ids loaded from parquet file")
+        except FileNotFoundError:
+            logger.info("Generating user ids")
+            self.user_meta = self._generate_user_ids()
+
+    @staticmethod
+    def _generate_user_ids() -> pd.DataFrame:
+        user_meta_raw = pd.read_csv(settings.paths.user_meta_raw, delimiter="\t")
+        user_name_df = user_meta_raw[COL_NAMES.user_id].sort_values().unique()
         user_ids = range(1, len(user_name_df) + 1)
         user_name_id_dict = dict(zip(user_name_df, user_ids))
-        user_name_id_df = pd.DataFrame(
-            user_name_id_dict.items(), columns=[COL_NAMES.user_name, COL_NAMES.user_id]
+        user_meta = user_meta_raw.rename(
+            columns={COL_NAMES.user_id: COL_NAMES.user_name}
         )
-        inter_df[COL_NAMES.user_id] = inter_df[COL_NAMES.user_name].map(
+        user_meta[COL_NAMES.user_id] = user_meta[COL_NAMES.user_name].map(
             user_name_id_dict
         )
-        inter_df = inter_df.drop(COL_NAMES.user_name, axis=1)
-        return inter_df, user_name_id_df
+        user_meta.to_parquet(settings.paths.user_meta, index=False)
+        return user_meta
 
     def preprocess_raw_interactions(
         self,
@@ -72,16 +81,17 @@ class InteractionsPreprocessor:
             }
         )
         inter_full_df[COL_NAMES.score] = inter_full_df[COL_NAMES.score].fillna(0)
-        logger.info("Interactions preprocessed, generating user ids...")
-        inter_full_df, user_name_id_df = self._generate_user_ids(inter_full_df)
+        inter_full_df[COL_NAMES.score] = inter_full_df[COL_NAMES.score].fillna(0)
+        inter_full_df[COL_NAMES.progress] = inter_full_df[COL_NAMES.progress].fillna(0)
+        logger.info("Interactions preprocessed, joining with user ids...")
+        inter_full_df = inter_full_df.merge(
+            self.user_meta[[COL_NAMES.user_id, COL_NAMES.user_name]],
+            on=COL_NAMES.user_name,
+        )
+        inter_full_df.drop(COL_NAMES.user_name, axis=1, inplace=True)
         inter_full_df.to_parquet(
-            settings.paths.interactions_score_favorite,
+            settings.paths.interactions_preprocessed,
             engine="pyarrow",
             index=False,
         )
-        user_name_id_df.to_parquet(
-            settings.paths.user_name_id,
-            engine="pyarrow",
-            index=False,
-        )
-        return inter_full_df, user_name_id_df
+        return inter_full_df
